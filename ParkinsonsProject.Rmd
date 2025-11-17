@@ -1,0 +1,284 @@
+---
+title: "Significant Variables in Parkinson's Analysis"
+author: "Lucas Steltenpohl and Andrew Spika"
+date: "2024-03-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Introduction
+```{r, echo=FALSE, warning=FALSE, include = FALSE}
+library(readxl)
+parkinsons <- read.csv("parkinsons.csv")
+Patient_Info <- read_excel("Patient Info.xlsx")
+
+
+# Getting rid of '(healthy)' label in Patient Info Subject Codes
+Patient_Info$"Subject code" <- substr(Patient_Info$`Subject code`, 1, 3)
+
+# Joining parkinsons data with patient info based on subject code
+subjects <- strsplit(parkinsons$name, "_")
+subject_code <- c()
+
+for(i in 1:length(subjects)) {
+  subject_code[i] <- subjects[[i]][3]
+}
+parkinsons$"Subject code" <- subject_code
+
+full.data <- full_join(parkinsons, Patient_Info, by="Subject code")
+full.data <- full.data %>% filter(`Subject code` != "S31") %>% dplyr::select(-c(24,25))
+
+full.data$Sex <- as.factor(full.data$Sex)
+full.data$`Stage (H&Y)` <- as.factor(full.data$`Stage (H&Y)`)
+
+
+# Data for 2 sample tests, all numeric measurements are average for each subject
+full.data$`Stage (H&Y)` <- full.data$`Stage (H&Y)` %>% as.character %>% as.numeric
+full.data$Sex <- full.data$Sex %>% as.numeric
+full.data$`Years since diagnosis` = full.data$`Years since diagnosis` %>% as.numeric
+
+two.samp.data <- full.data %>% group_by(`Subject code`) %>% summarise(
+  MDVP.Fo.Hz. = mean(MDVP.Fo.Hz.), 
+  MDVP.Fhi.Hz. = mean(MDVP.Fhi.Hz.), 
+  MDVP.Flo.Hz. = mean(MDVP.Flo.Hz.),
+  MDVP.Jitter... = mean(MDVP.Jitter...),
+  MDVP.Jitter.Abs. = mean(MDVP.Jitter.Abs.), 
+  MDVP.RAP = mean(MDVP.RAP),
+  MDVP.PPQ = mean(MDVP.PPQ),
+  MDVP.Shimmer = mean(MDVP.Shimmer),
+  MDVP.Shimmer.dB. = mean(MDVP.Shimmer.dB.),
+  MDVP.APQ = mean(MDVP.APQ), 
+  Jitter.DDP = mean(Jitter.DDP),
+  Shimmer.APQ3 = mean(Shimmer.APQ3),
+  Shimmer.APQ5 = mean(Shimmer.APQ5),
+  Shimmer.DDA = mean(Shimmer.DDA),
+  NHR = mean(NHR),
+  HNR = mean(HNR),
+  status = mean(status),
+  Age = mean(Age),
+  Sex = mean(Sex),
+  `Stage (H&Y)` = mean(`Stage (H&Y)`),
+  `Years since diagnosis` = mean(`Years since diagnosis`)
+  )
+
+two.samp.data$Sex <- ifelse(two.samp.data$Sex==1, "F", "M")
+two.samp.data$`Stage (H&Y)` <- as.factor(two.samp.data$`Stage (H&Y)`)
+
+```
+
+Our focus of the project was identifying relationships between various vocal metrics and Parkinson’s disease while taking an enhanced look at the effect of sex on this relationship. The data set utilized contained 31 individuals, 23 of which are diagnosed with Parkinson’s disease with the remaining 8 being negative. We utilized bar plots, box plots, and scatter plots to recognize patterns between variables such as sex, status (health status of the subject), stage (severity of Parkinson’s), MDVP (vocal fundamental frequency), and NHR/HNR (two measures of ratio of noise to tonal components in the voice). Based on our data exploratory findings and visuals we conducted statistical tests to prove our hypotheses. The variable names utilized are listed below. 
+
+Variable          |  Description
+------------------|--------------------------------------------------------------
+name              |                   Subject code and recording number
+MDVP:Fo(Hz)       |                   Average vocal fundamental frequency
+MDVP:Fhi(Hz)      |                   Maximum vocal fundamental frequency
+MDVP:Flo(Hz)      |                   Minimum vocal fundamental frequency
+MDVP:Jitter(%)    |                   Measure of variation in fundamental frequency
+MDVP:Jitter(Abs)  |                   Measure of variation in fundamental frequency
+MDVP:RAP          |                   Measure of variation in fundamental frequency
+MDVP:PPQ          |                   Measure of variation in fundamental frequency
+Jitter:DDP        |                   Measure of variation in fundamental frequency
+MDVP:Shimmer      |                   Measure of variation in amplitude
+NHR, HNR          |                   Two measures of ratio to tonal components in the voice
+Status            |                   Health status of the subject; 1 = Parkinson's, 0 = healthy
+
+
+# Data Exploratory
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(GGally)
+two.samp.data[,c(2,3,4,20)] %>% ggpairs(aes(color=as.factor(two.samp.data$status)), diag = list(continuous = wrap("densityDiag", alpha=0.5))) + 
+  labs(subtitle="Healthy Patients are in Red, Parkinson's Patients are in Blue",
+       caption="Figure 1: Plots of Fundamental Vocal Frequency Measurements and Patient Sex")
+```
+
+Figure 1 is displaying the relationships between the average, maximum, and minimum vocal fundamental frequencies. Figure 1 plots are colored by whether the patient has Parkinson's or not. The density graphs show some possible differences in distributions of the measurements for healthy and Parkinson's patients. However, the boxplots for each measurement separated by Sex of patient shows that each measurement may differ substantially based on the patient's sex. This could make these measurement unreliable predictors of Parkinson's disease presence if the Sex of patient is unknown. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+two.samp.data[,c(9,10,11,13,14,20)] %>% ggpairs(aes(color=as.factor(two.samp.data$status)), diag = list(continuous = wrap("densityDiag", alpha=0.5))) + 
+  labs(subtitle="Healthy Patients are in Red, Parkinson's Patients are in Blue",
+       caption="Figure 2: Plots of Measurement of Variance in Amplitude for each Patient and Sex of Patient")
+```
+
+Figure 2 shows the relationships between the measures of variation in amplitude for each patient. The graphs are colored red when considering healthy patients and blue when considering patients with Parkinson’s disease. The density plots going down the diagonal of the graphic show clear differences in distributions for each of the measurements in healthy and sick patients. The boxplots on the right side of the graphic show that the measurements of each of these variables are similar for both sexes. Because of this, we feel confident considering the data similar for males and females, and therefore we will use some of these measures of amplitude to test to see if they are significantly different for patients with Parkinson’s and those without.
+
+```{r, echo=FALSE, warning = FALSE}
+two.samp.data %>% ggplot() +
+  geom_density(aes(NHR, fill=as.factor(status), alpha=0.5)) +
+  labs(title="NHR Distributions for Healthy and Sick Patients", x="NHR", y="Density", fill="Status", alpha="") +
+  guides(alpha="none") + 
+  scale_fill_discrete(labels=c("Healthy", "Parkinson's"), type=c("blue", "red")) +
+  labs(caption="Figure 3")
+
+```
+
+Figure 3 displays the density distributions of NHR colored by Parkinson's disease status. It is evident that there is a clear distribution difference between health status. 
+
+
+
+
+# Statistical Methods 
+
+Due to each patient having 6-7 different observations, we decided it would be best to take an average of these readings since they are not independent results. We then utilized these average readings to conduct our statistical tests. With the data summarized, we now have two independent samples, one of 8 healthy patients and one of 23 patients with Parkinson's. 
+```{r, echo=FALSE, message=FALSE}
+park.patients <- two.samp.data %>% filter(status==1)
+healthy.patients <- two.samp.data %>% filter(status==0)
+
+park.patients %>% ggplot() + 
+  geom_qq(aes(sample=NHR)) + 
+  geom_qq_line(aes(sample=NHR)) + 
+  labs(title="Normal Q-Q Plot for NHR among Parkinson's Patients", y="Sample Quantiles", x="Theoretical Quantiles", caption="Figure 4")
+
+healthy.patients %>% ggplot() +
+  geom_qq(aes(sample=NHR)) + 
+  geom_qq_line(aes(sample=NHR)) + 
+  labs(title="Normal Q-Q Plot for NHR among Healthy Patients", y="Sample Quantiles", x="Theoretical Quantiles", caption="Figure 5")
+```
+
+Because of the small sample sizes of 23 and 8, it is not safe to outright assume normality. To determine if it is necessary to consider use of non-parametric statistical tests for analysis, in this case for the NHR variable, normal probability plots were made. Figure 4 shows the normal probability plot for Parkinson's patients and indicates that the sample does not appear to be normally distributed. Figure 5 is the normal probability plot for healthy patients and also does not appear to be normally distributed. Because of the lack of normality and the small sample sizes, less than 30 each, we used the following statistical tests to analyze the data.
+
+* Wilcox Mann-whitney Test (WMW Test)
+  + The WMW test is a statistical test used to identify if the center (mean or median) of two small samples differ. 
+* Kolmogorov-Smirnov Test (K-S Test)
+  + The K-S test is a formal method to determine if two small samples come from identical populations. In this context we tested if there is a difference in distributions in Parkinson's disease status.
+* Two-Sample Permutation Test
+  + The two-sample permutation test it used to find differences is population parameters such as means, medians, or variances. This test using simulation to compare the observed difference to a mass of permuted differences. 
+
+
+
+
+# Test Results and Conclusions
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+park.patients <- two.samp.data %>% filter(status==1)
+healthy.patients <- two.samp.data %>% filter(status==0)
+```
+
+To test to see if the two populations, those with Parkinson's and those without, have equal distribution in terms of NHR measurements, a K-S test was done. The test yielded a test statistic D = 0.61413 and a p-value = 0.01334. At the 0.05 significance level, we have significant evidence that NHR measurements for patients are different in the patients with Parkinson's disease and the patients without Parkinson's disease. 
+```{r, echo=FALSE, message=FALSE, inlcude=FALSE, results="hide"}
+ks.test(park.patients$NHR, healthy.patients$NHR)
+```
+
+For each of the measures of variation in amplitude, we conducted a Wilcoxon Mann-Whitney test to determine if healthy patients and patients with Parkinson's have different centrality estimates. The test statistics and p-values are displayed in the table below.
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+healthy.amplitudes <- healthy.patients %>% dplyr::select(c(MDVP.Shimmer, MDVP.Shimmer.dB., MDVP.APQ, Shimmer.APQ3, Shimmer.APQ5))
+park.amplitudes <- park.patients %>% dplyr::select(c(MDVP.Shimmer, MDVP.Shimmer.dB., MDVP.APQ, Shimmer.APQ3, Shimmer.APQ5))
+statistics <- c()
+p.values <- c()
+for(i in 1:ncol(park.amplitudes)) {
+  park <- park.amplitudes[,i] %>% unlist
+  healthy <- healthy.amplitudes[,i] %>% unlist
+  test <- wilcox.test(park, healthy)
+  statistics[i] <- test$statistic
+  p.values[i] <- test$p.value
+}
+table <- data.frame(Measurement = c("MDVP.Shimmer", "MDVP.Shimmer.dB", "MDVP.APQ", "Shimmer.APQ3", "Shimmer.APQ5"), `Test Statistic` = statistics, `P-Values` = p.values)
+
+```
+
+Measurement      | Statistic | P-value
+---------------- | --------- | -------
+MDVP.Shimmer     | 151       | 0.00635
+MDVP.Shimmer.dB  | 153       | 0.00455
+MDVP.APQ         | 160       | 0.00125
+Shimmer.APQ3     | 144       | 0.01779
+Shimmer.APQ5     | 148       | 0.01006
+
+
+As can be seen in Table 1, each Wilcoxon Mann-Whitney test for equality of location parameter yielded a p-value lower than 0.05. Each gives us significant evidence that these measurements in variation in amplitude are different in patients with Parkinson's and patients without Parkinson's. 
+
+From what can be seen in the graphic with Average Vocal Fundamental Frequency, there is clear difference in measurements between Males and Females. Because of this, we did a test for a difference in just females who are healthy and who have Parkinson's and a test for a difference in just males who are healthy and who have Parkinson's. To test this, we used a two-sample permutation test using the mean of the patients Average Vocal Fundamental Frequency measure. This procedure for the females, when repeated multiple times, yielded p-values in the 0 to 0.020 range. At a significance level of 0.05, we have significant evidence that, among females, healthy patients have different average vocal fundamental frequency measurements than those with Parkinson's. The same procedure using the males, when repeated multiple times, yielded p-values in the 0.470 to 0.490 range. At the 0.05 significance level, we do not have significant evidence that, among males, healthy patients have different average vocal frequency measurements than those with Parkinson's disease. 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+### For Females
+females <- two.samp.data %>% filter(Sex=="F")
+female.park <- females %>% filter(status==1)
+female.healthy <- females %>% filter(status==0)
+
+library(tidyverse)
+
+dat1= female.park$MDVP.Fo.Hz.
+dat2= female.healthy$MDVP.Fo.Hz.
+
+##Store the data sizes and find the observed test statistic
+#Diff in means can be changed to diff in medians, ratio of variances, etc.
+m=length(dat1)
+n=length(dat2)
+tot=m+n
+Dobs=mean(dat2) - mean(dat1)
+
+
+nperm=1000 #set the number of simulated permutations at a large value
+Dperm=rep(0,nperm) #create a null vector to store the permuted differences in
+alldat=c(dat1,dat2) #combine the two data sets
+
+
+##Do the permutations using a loop
+for(i in 1:nperm){
+#line below determines which of the m+n observations go to group 1, with rest in group 2
+index=sample(1:tot,m)
+#the next two lines put the observations into new groups called newdat1 and newdat2
+newdat1=alldat[index]
+newdat2=alldat[-index]
+#the next line calculates the test stat for the permuted data and stores in Dperm
+Dperm[i]=mean(newdat2)-mean(newdat1)
+}
+
+##Graphical display of permuted differences with line for observed difference
+#hist(Dperm); abline(v=Dobs, col="blue", lwd=2); abline(v=-Dobs, col="blue", lwd=2)
+##also add the code abline(v=-Dobs,col="blue",lwd=2) if doing a two-sided test
+
+##Now need to check how extreme Dobs is in regards to Dperm. Change sign or add absolute value as needed to match Ha.
+pvalue=sum(abs(Dperm)>=abs(Dobs))/nperm
+
+#pvalue
+
+
+### For Males
+males <- two.samp.data %>% filter(Sex=="M")
+male.park <- males %>% filter(status==1)
+male.healthy <- males %>% filter(status==0)
+
+dat1= male.park$MDVP.Fo.Hz.
+dat2= male.healthy$MDVP.Fo.Hz.
+
+##Store the data sizes and find the observed test statistic
+#Diff in means can be changed to diff in medians, ratio of variances, etc.
+m=length(dat1)
+n=length(dat2)
+tot=m+n
+Dobs=mean(dat2) - mean(dat1)
+
+
+nperm=1000 #set the number of simulated permutations at a large value
+Dperm=rep(0,nperm) #create a null vector to store the permuted differences in
+alldat=c(dat1,dat2) #combine the two data sets
+
+
+##Do the permutations using a loop
+for(i in 1:nperm){
+#line below determines which of the m+n observations go to group 1, with rest in group 2
+index=sample(1:tot,m)
+#the next two lines put the observations into new groups called newdat1 and newdat2
+newdat1=alldat[index]
+newdat2=alldat[-index]
+#the next line calculates the test stat for the permuted data and stores in Dperm
+Dperm[i]=mean(newdat2)-mean(newdat1)
+}
+
+##Graphical display of permuted differences with line for observed difference
+#hist(Dperm); abline(v=Dobs, col="blue", lwd=2); abline(v=-Dobs, col="blue", lwd=2)
+##also add the code abline(v=-Dobs,col="blue",lwd=2) if doing a two-sided test
+
+##Now need to check how extreme Dobs is in regards to Dperm. Change sign or add absolute value as needed to match Ha.
+pvalue=sum(abs(Dperm)>=abs(Dobs))/nperm
+
+
+```
+
+# Conclusion
+
+Overall, our results suggest that various vocal metrics have promise as a non-invasive way to indicate Parkinson's disease, especially when considering sex. Our statistical tests provide evidence that patient's NHR measurements could serve as a potential indicator for the disease. We also found that each of the measurements taken for variation in amplitude were potential valid predictors of Parkinson's disease in patients. Additionally, the average vocal fundamental frequency is a key distinguishable characteristic among female patients but not among male patients. Further investigation on these metrics may validate these findings and lead to better Parkinson's disease diagnostic tools. 
